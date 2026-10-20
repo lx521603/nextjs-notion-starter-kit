@@ -29,8 +29,7 @@ jobs:
         env:
           NEXT_PUBLIC_POSTHOG_ID: ${{ secrets.NEXT_PUBLIC_POSTHOG_ID }}
 
-      # 🌟 优化：参考你成功的项目，一次性优雅推送整个 standalone 产物（自带 static 和 public）
-      - name: Deploy standalone to VPS (rsync)
+      - name: Deploy standalone to VPS
         uses: easingthemes/ssh-deploy@main
         with:
           SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -40,8 +39,30 @@ jobs:
           TARGET: "/opt/rozy/"
           ARGS: "-avz --delete"
 
-      # 🌟 优化：合并为一个 ssh-action 步骤，顺便用上你习惯的 Here-Doc 和 --update-env
-      - name: Update .env and Restart PM2 service on VPS
+      # 🌟 步骤 2：同步 static 资源（解决样式丢失的关键！）
+      - name: Deploy static assets to VPS
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.VPS_HOST }}
+          REMOTE_USER: ${{ secrets.VPS_USER }}
+          SOURCE: ".next/static/"
+          TARGET: "/opt/rozy/.next/static/"
+          ARGS: "-avz --delete"
+
+      # 🌟 步骤 3：同步 public 目录（解决图片/图标等静态文件 404）
+      - name: Deploy public assets to VPS
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.VPS_HOST }}
+          REMOTE_USER: ${{ secrets.VPS_USER }}
+          SOURCE: "public/"
+          TARGET: "/opt/rozy/public/"
+          ARGS: "-avz --delete"
+
+      # 🌟 步骤 4：更新环境变量并平滑重启 PM2
+      - name: Update Env and Restart PM2 service on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -49,17 +70,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /opt/rozy/
-            
-            # 使用更规范的 Here-Doc 写入环境变量
             cat <<EOF > .env
             NEXT_PUBLIC_POSTHOG_ID=${{ secrets.NEXT_PUBLIC_POSTHOG_ID }}
             EOF
-            
             echo "=== 重启 Next.js 服务 ==="
-            # 使用 --update-env 确保 PM2 能够加载到最新的 .env 变量
             pm2 restart rozy-app --update-env || PORT=3000 HOSTNAME="0.0.0.0" pm2 start server.js --name "rozy-app"
-            
             pm2 save
-            
             echo "✅ Next.js 部署完成！当前状态："
             pm2 status
