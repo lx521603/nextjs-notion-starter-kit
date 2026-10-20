@@ -10,13 +10,13 @@ export function ErrorPage({
   return (
     <div className={styles.container}>
       <main className={styles.main}>
-        <h1>Error Loading Page</h1>
+        <h1>错误</h1>
 
         {statusCode && <p>Error code: {statusCode}</p>}
 
         {onRetry && (
           <button type='button' onClick={onRetry}>
-            Try again
+            重试
           </button>
         )}
 

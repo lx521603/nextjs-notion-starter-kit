@@ -13,15 +13,14 @@ export function Page404({ pageId, error }: types.PageProps) {
   return (
     <div className={styles.container}>
       <main className={styles.main}>
-        <h1>Notion Page Not Found</h1>
+        <h1 style={{ fontSize: '3rem', marginBottom: '16px' }}>网页不存在</h1>
 
         {error ? (
-          <p>{error.message}</p>
+          <p style={{ fontSize: '1.25rem' }}>{error.message}</p>
         ) : (
           missingPageId && (
-            <p>
-              Make sure that Notion page &quot;{missingPageId}&quot; is publicly
-              accessible.
+            <p style={{ fontSize: '1.25rem' }}>
+              &quot;{missingPageId}&quot; 不存在
             </p>
           )
         )}

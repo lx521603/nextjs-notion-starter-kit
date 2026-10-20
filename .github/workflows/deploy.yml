@@ -1,0 +1,82 @@
+name: Deploy Next.js to VPS
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Next.js project
+        run: pnpm build
+
+      # 🌟 步骤 1：同步 standalone 产物到 /opt/rozy/
+      - name: Deploy standalone to VPS
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.VPS_HOST }}
+          REMOTE_USER: ${{ secrets.VPS_USER }}
+          SOURCE: ".next/standalone/"
+          TARGET: "/opt/rozy/"
+          ARGS: "-avz --delete"
+
+      # 🌟 步骤 2：同步 static 资源
+      - name: Deploy static assets to VPS
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.VPS_HOST }}
+          REMOTE_USER: ${{ secrets.VPS_USER }}
+          SOURCE: ".next/static/"
+          TARGET: "/opt/rozy/.next/static/"
+          ARGS: "-avz --delete"
+
+      # 🌟 步骤 3：同步 public 目录
+      - name: Deploy public assets to VPS
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.VPS_HOST }}
+          REMOTE_USER: ${{ secrets.VPS_USER }}
+          SOURCE: "public/"
+          TARGET: "/opt/rozy/public/"
+          ARGS: "-avz --delete"
+
+      # 🌟 步骤 4：在 VPS 上重启 PM2 服务
+      - name: Restart PM2 service on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/rozy/
+            echo "NEXT_PUBLIC_POSTHOG_ID=${{ secrets.NEXT_PUBLIC_POSTHOG_ID }}" > .env
+            pm2 delete rozy-app || true
+            echo "=== 重启 Next.js 服务 ==="
+            PORT=3000 HOSTNAME="0.0.0.0" pm2 start server.js --name "rozy-app"
+            
+            pm2 save
+            
+            echo "✅ Next.js 部署完成！当前状态："
+            pm2 status
